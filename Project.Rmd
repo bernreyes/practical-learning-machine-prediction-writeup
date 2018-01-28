@@ -1,0 +1,108 @@
+---
+title: "Practical Learning Machine - Prediction Writeup"
+author: "Bern Reyes"
+date: "January 28, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the [website here](http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+###Data
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har.
+
+```{r, echo=FALSE}
+setwd("C:/Users/Peesonal/Documents/Dette/Coursera/8. Practical Machine Learning/Week 4/Project")
+```
+
+###Data Loading and Processing
+```{r, echo=TRUE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists("./data/pml-training.csv")) {
+  url.training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(url.training, destfile = "./data/pml-training.csv", method="curl")
+}
+
+if (!file.exists("./data/pml-testing.csv")) {
+  url.testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url.testing, destfile = "./data/pml-testing.csv", method="curl")
+}
+
+training <- read.csv("./data/pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+
+#check the observations and variables of the data
+dim(training)
+
+#remove variables with missing values
+training <- training[, colSums(is.na(training)) == 0] 
+
+names(training)
+#remove the first 7 variables that are not useful for the analysis
+training <- training[,-(1:7)]
+```
+There are originally 160 variables, but most of them have missing or invalid values. Also, the first seven columns which are about the timestamp, username and new/num window in the data are not useful for the analysis, thus these were removed from the dataset.
+
+### Data Partitioning
+The training dataset was partitioned into two sets, 70% as training data and the remaining 30% as testing data for cross validation.
+```{r, echo=TRUE}
+fortraining <- createDataPartition(training$classe, p=0.7, list=FALSE)
+training_data <- training[fortraining,]
+testing_data <- training[-fortraining,]
+```
+
+### Data Prediction and Modeling
+Two methods will be used in this report, Decision Tree and Random Forest. The chosen model after comparing the two models will be used to answer the course project prediction quiz.
+
+##Decision Tree
+```{r, echo=TRUE, error=FALSE, message=FALSE}
+set.seed(100)
+dtree <- rpart(classe ~ ., data = training_data, method="class", control = rpart.control(method = "cv", number = 10))
+fancyRpartPlot(dtree)
+predictdtree <- predict(dtree, newdata=testing_data, type="class")
+confusionMatrix(predictdtree, testing_data$classe)
+```
+The accuracy of the Decision Tree model is 74.6%.
+
+##Random Forest
+```{r, echo=TRUE, error=FALSE, message=FALSE}
+set.seed(100)
+control <- trainControl(method="cv", 5)
+RForest <- train(classe ~ ., data=training_data, method="rf", trControl=control)
+RForest
+predictRForest <- predict(RForest, testing_data)
+confusionMatrix(testing_data$classe, predictRForest)
+```
+The accuracy of the Random Forest model is 99.4% which means that this model yields more accurate result than the Decision Tree. Thus, it will be used for the testing data for course project prediction quiz.
+
+###Prediction using the Random Forest Model to the Testing Data
+```{r, echo=TRUE}
+#Load and clean the testing data
+test <- read.csv("./data/pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+test <- test[, colSums(is.na(test)) == 0]
+test <- test[,-(1:7)]
+
+#Apply the chosen model
+predictTestdata <- predict(RForest, newdata=test)
+predictTestdata
+```
+The results above are the answer to the 20-item quiz.
